@@ -36,7 +36,5 @@ Due to instrument constraints (a medical thermometer with a valid reading range 
 ## Authors & Contributors
 
 * **Roozbeh Amini**
-* **Masih Shanesazzadeh**
-* **Mehran Feizi**
 
 **Date:** February 2026
