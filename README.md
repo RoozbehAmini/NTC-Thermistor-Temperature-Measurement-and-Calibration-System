@@ -1,40 +1,69 @@
-# NTC Thermistor Temperature Measurement and Calibration System
+# NTC Thermistor Temperature Measurement (0 to 100 °C)
 
-This repository contains the hardware design, calibration data, MATLAB scripts, and Arduino firmware for a complete NTC thermistor temperature measurement system.
+Arduino and MATLAB code for a calibrated NTC thermistor thermometer: a 10 kΩ NTC in a voltage divider, a unity-gain difference amplifier (LM741) that shifts 0 °C to 0 V, and an external ADC reference that maps 100 °C to full scale on an Arduino Uno.
 
-This project was developed as **Lab Session #6** for the Measurement Systems course at the University of Tehran (Instructed by Dr. Ali Sadighi).
+Measurement Systems Lab, Session 06, University of Tehran (Instructor: Dr. Ali Sadighi), February 2026. The lab report, [`Lab6_Project_Report.pdf`](Lab6_Project_Report.pdf), covers the circuit design, theory, data collection, MATLAB analysis and verification.
 
-## Project Overview
+## Results
 
-The objective of this project is to design, calibrate, and verify a temperature measurement system built around a 10 kΩ NTC thermistor, a unity-gain difference amplifier, and an Arduino Uno. Because NTC thermistors have a strongly nonlinear resistance-temperature characteristic, the project required a physics-based calibration model ($\beta$-parameter equation) and careful signal conditioning before interfacing with the microcontroller's ADC.
+The fitted beta model gives β = 3578.29 K and R0 = 9835.46 Ω at 25 °C. With the 3.325 V reference, one ADC step is about 3.25 mV, compared with about 4.9 mV on the default 5 V reference. In the final check, the thermometer differed from the medical thermometer by 0.08 °C.
 
-The final system maps the Arduino's 10-bit ADC full scale to the nominal 0–100°C measurement range, achieving a voltage resolution of 3.25 mV/step—a 33.5% improvement over the default 5V reference. Final verification showed a discrepancy of only 0.08°C against a medical thermometer reference.
+## Repository layout
 
-## System Architecture
+```
+Arduino/
+  calibration_logger/      50 Hz, 60 s logger used for every calibration point
+  live_voltage_reader/     2 Hz voltmeter used to set the two trimmer pots
+  temperature_firmware/    final thermometer firmware (external AREF)
+Matlab/
+  acquire_calibration_point.m   reads one 60 s record over serial, saves it, appends to master list
+  fit_beta_model.m              fits the beta model, extrapolates to 100 °C, saves figures
+```
 
-The signal conditioning circuit consists of four series stages to accurately map the thermistor's non-linear output to the Arduino:
+The MATLAB scripts create `data/` (raw traces and `calibration_master_list.csv`) and `figures/` next to the `Matlab/` folder.
 
-* **Stage 1: Thermistor Voltage Divider:** Converts the NTC thermistor's variable resistance into a voltage signal ($V_{th}$).
-* **Stage 2: Reference Voltage Generator (3.73 V):** A potentiometer-based adjustable voltage divider calibrated using a 0°C ice bath to establish a stable reference.
-* **Stage 3: Unity-Gain Difference Amplifier:** Subtracts the 3.73 V reference from the thermistor signal using an LM741 op-amp and four 1 MΩ resistors (chosen to satisfy the 10x impedance loading rule).
-* **Stage 4: External ADC Reference (3.325 V):** A secondary potentiometer providing a custom AREF voltage to the Arduino. This value was derived by extrapolating the fitted $\beta$-model to 100°C, ensuring the full 1023 ADC steps are utilized for the target temperature range.
+## Signal chain
 
-## Calibration Process
+```
+5V --[10k]--+--[NTC]-- GND
+            |
+           Vth --> diff amp (V-)          all four diff-amp resistors = 1 MΩ
+Pot 1 (3.730 V) --> diff amp (V+)
+diff amp output = 3.730 - Vth --> A0
+Pot 2 (3.325 V) --[5k]--> AREF
+```
 
-Due to instrument constraints (a medical thermometer with a valid reading range of 32–43°C), calibration was anchored using physical fixed points and mathematical extrapolation:
+The firmware inverts each stage: ADC count → V_adc → V_th = 3.730 − V_adc → R_th = 10k · V_th / (5 − V_th) → T from the beta model.
 
-1. **Low Anchor (0°C):** An ice bath established the thermodynamic fixed point, yielding the Stage 2 reference voltage ($V_{ref} = 3.73$ V).
-2. **High Anchor (~90°C):** Boiling water (reduced from 100°C due to Tehran's altitude and rapid cooling) was used to capture high-temperature resistance behavior.
-3. **Intermediate Points (33–38°C):** Mixed hot and cold baths were measured against a clinical medical thermometer.
-4. **MATLAB Modeling:** The 8 recorded points were fitted to a linearized $\beta$-parameter model using least-squares regression, yielding $\beta = 3578.29$ K and $R_0 = 9835.46$ Ω.
+## Workflow
 
-## Repository Contents
+1. Wire the divider node straight to A0 and upload `calibration_logger`. For each bath, wait for the reference thermometer to settle, then run `acquire_calibration_point.m` (set `port` first). Opening the port resets the Uno, so every run records a fresh 60 s trace. The last 10 s are averaged.
+2. Run `fit_beta_model.m`. It prints β, R0, the per-point residuals in °C, and the model's diff-amp output at 100 °C (the V_AREF target). If `data/calibration_master_list.csv` is missing, it uses the eight points below.
+3. Upload `live_voltage_reader` to set the pots. Set pot 1 to 3.730 V (wiper on A2), then change `PIN_ANALOG` to `A1` and set pot 2.
+4. Copy β, R0, V_AREF and the 0 °C reference into `temperature_firmware` and upload it. It prints `V_adc,V_th,R_th,Temp_C` at 2 Hz (9600 baud).
 
-* `Lab6_Project_Report.pdf`: Comprehensive documentation of the circuit design, theoretical background, data collection process, MATLAB analysis, and final verification.
-* *(Note: Add your firmware, MATLAB `.m` scripts, and raw `.csv` data files to their respective folders when uploading the code to this repository)*
+> The AREF pin has an internal resistance of about 32 kΩ, so the 5 kΩ protection resistor forms a divider with it. With `temperature_firmware` running, measure the voltage at the AREF pin itself with a multimeter and use that value for `V_AREF`.
 
-## Authors & Contributors
+## Calibration data
 
-* **Roozbeh Amini**
+| T (°C) | R_th (Ω) | Source |
+|---:|---:|---|
+| 0.0 | 29 498.05 | Ice bath |
+| 33.2 | 7 241.27 | Mixed bath + medical thermometer |
+| 34.4 | 6 832.37 | Mixed bath + medical thermometer |
+| 35.3 | 6 585.11 | Mixed bath + medical thermometer |
+| 37.0 | 6 135.16 | Mixed bath + medical thermometer |
+| 37.8 | 5 944.50 | Mixed bath + medical thermometer |
+| 38.2 | 5 892.11 | Mixed bath + medical thermometer |
+| 90.0 | 1 135.84 | Boiling water (assigned 90 °C) |
 
-**Date:** February 2026
+Water boils below 100 °C at Tehran's altitude and cooled quickly during the measurement, so the boiling-water point was assigned 90 °C.
+
+## Requirements
+
+- Arduino Uno and the Arduino IDE (no extra libraries)
+- MATLAB R2023a or newer (`xregion`); the acquisition script alone needs R2019b+ (`serialport`)
+
+## Authors
+
+Roozbeh Amini, Masih Shanesazzadeh, Mehran Feizi
