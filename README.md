@@ -64,6 +64,6 @@ Water boils below 100 °C at Tehran's altitude and cooled quickly during the mea
 - Arduino Uno and the Arduino IDE (no extra libraries)
 - MATLAB R2023a or newer (`xregion`); the acquisition script alone needs R2019b+ (`serialport`)
 
-## Authors
+## Author
 
-Roozbeh Amini, Masih Shanesazzadeh, Mehran Feizi
+Roozbeh Amini
